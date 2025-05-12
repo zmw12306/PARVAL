@@ -1,0 +1,104 @@
+# given the parsing entry function code:
+void
+parse_packet(const unsigned char *from, struct interface *ifp,
+             const unsigned char *packet, int packetlen)
+{
+    int i;
+    const unsigned char *message;
+    unsigned char type, len;
+    int bodylen;
+    struct neighbour *neigh;
+    int have_router_id = 0, have_v4_prefix = 0, have_v6_prefix = 0,
+        have_v4_nh = 0, have_v6_nh = 0;
+    unsigned char router_id[8], v4_prefix[16], v6_prefix[16],
+        v4_nh[16], v6_nh[16];
+    int have_hello_rtt = 0;
+    /* Content of the RTT sub-TLV on IHU messages. */
+    unsigned int hello_send_us = 0, hello_rtt_receive_time = 0;
+    babel_interface_nfo *babel_ifp = babel_get_if_nfo(ifp);
+
+    if (CHECK_FLAG(babel_ifp->flags, BABEL_IF_TIMESTAMPS)) { 
+        /* We want to track exactly when we received this packet. */
+        gettime(&babel_now);
+    }
+
+    if (!linklocal(from)) {
+        flog_err(EC_BABEL_PACKET,
+		  "Received packet from non-local address %s.",
+                  format_address(from));
+        return;
+    }
+
+    if (packet[0]!=42 || packet[1]!=2) {
+        flog_err(EC_BABEL_PACKET,
+		  "Received malformed packet from non-local address %s.",
+                  format_address(from))
+    }
+    int len = (B[2] << 8) | B[3];
+    if(!checklen (len, packetlen, from)) {
+        flog_err(EC_BABEL_PACKET,
+		  "Received malformed packet from non-local address %s.",
+                  format_address(from))
+    }
+    return;
+}
+
+## Analyze Process ##
+packet and packetlen are input buffer and the length of input buffer.
+1.We need to iteratively query function definitions and track the input validation logic. 
+if (CHECK_FLAG(babel_ifp->flags, BABEL_IF_TIMESTAMPS)) are not related to packet or packet len. Also function 'gettime', 'linklocal' are not related to packet or packet len. We donnot need to query function definiton for these functions.
+Since checklen takes packetlen as parameter, we need to invoke query_function("checklen") to retrieve the function definiton:
+
+bool checklen(int len, int packetlen, const unsigned char *from) {
+    if (len < 4){
+        flog_err(EC_BABEL_PACKET,
+		  "Received packet from non-local address %s.",
+                  format_address(from));
+        return False;
+    }
+   
+    if (len + 4 > packetlen){
+        flog_err(EC_BABEL_PACKET,
+		  "Received packet from non-local address %s.",
+                  format_address(from));
+        return False;
+    }
+        
+    return True;
+}
+
+Since 'flog_err' is an error printing function, no need to further check other function definiton.
+
+2. Create isolated parsing function
+'checklen' should also be refactored to remove input parameter: from, which is not directly related to input buffer or length. So we got:
+
+bool checklen(int len, int packetlen) {
+    if (len < 4)
+        return False;
+    if (len + 4 > packetlen)
+        return False;
+    return True;
+}
+
+bool
+parse_packet(const unsigned char *packet, int packetlen)
+{
+    int i;
+    const unsigned char *message;
+    unsigned char type, len;
+    int bodylen;
+    
+    if (packet[0]!=42 || packet[1]!=2) {
+        printf("Received malformed packet from non-local address.");
+        return false;
+                 
+    }
+    int len = (B[2] << 8) | B[3];
+    if(!checklen (len, packetlen)) {
+        flog_err(EC_BABEL_PACKET,
+		  "Received malformed packet from non-local address.");
+          return false;
+    }
+        
+    return true;
+}

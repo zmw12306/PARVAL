@@ -1,0 +1,5 @@
+autogen_agentchat==0.2.39
+pyautogen==0.2.35
+tree_sitter==0.24.0
+tree_sitter_c==0.23.1
+typing_extensions==4.13.2
